@@ -1,0 +1,17 @@
+{
+  "name": "purescript-webstorage-free",
+  "moduleType": [
+    "node"
+  ],
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-webstorage": "~0.4.0",
+    "purescript-free": "~0.9.1",
+    "purescript-freet": "~0.3.1"
+  }
+}
