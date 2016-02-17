@@ -9,3 +9,4 @@ script:
   - pulp build --censor-lib
   - bower link
   - cd examples/halogen-storage/ && bower link purescript-webstorage-free && bower install && pulp build --censor-lib
+  - cd examples/halogen-storage-aff/ && bower link purescript-webstorage-free && bower install && pulp build --censor-lib
