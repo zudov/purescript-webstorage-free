@@ -29,14 +29,15 @@ import Control.Monad.Rec.Class (class MonadRec)
 import Data.Maybe (Maybe())
 import Data.Functor ((<$))
 import Data.NaturalTransformation (Natural())
+import Data.Int as Int
 
 import Browser.WebStorage as WebStorage
 
 data StorageF a
   = Clear a
   | GetItem String (Maybe String -> a)
-  | Key Number (Maybe String -> a)
-  | Length (Number -> a)
+  | Key Int (Maybe String -> a)
+  | Length (Int -> a)
   | RemoveItem String a
   | SetItem String String a
 
@@ -69,10 +70,10 @@ clear = liftStorage (Clear unit)
 getItem :: ∀ f. (HasStorage f) => String -> f (Maybe String)
 getItem a = liftStorage (GetItem a id)
 
-key :: ∀ f. (HasStorage f) => Number -> f (Maybe String)
+key :: ∀ f. (HasStorage f) => Int -> f (Maybe String)
 key a = liftStorage (Key a id)
 
-length :: ∀ f. (HasStorage f) => f Number
+length :: ∀ f. (HasStorage f) => f Int
 length = liftStorage (Length id)
 
 removeItem :: ∀ f. (HasStorage f) => String -> f Unit
@@ -100,8 +101,8 @@ storageFI
 storageFI storage query = case query of
   Clear          next -> next <$  liftEff (WebStorage.clear      storage)
   GetItem    a   cont -> cont <$> liftEff (WebStorage.getItem    storage a)
-  Key        a   cont -> cont <$> liftEff (WebStorage.key        storage a)
-  Length         cont -> cont <$> liftEff (WebStorage.length     storage)
+  Key        a   cont -> cont <$> liftEff (WebStorage.key        storage (Int.toNumber a))
+  Length         cont -> cont <$> liftEff (Int.round <$> WebStorage.length storage)
   RemoveItem a   next -> next <$  liftEff (WebStorage.removeItem storage a)
   SetItem    a b next -> next <$  liftEff (WebStorage.setItem    storage a b)
 
