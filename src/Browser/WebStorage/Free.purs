@@ -102,10 +102,22 @@ storageFI storage query = case query of
   RemoveItem a   next -> next <$  liftEff (WebStorage.removeItem storage a)
   SetItem    a b next -> next <$  liftEff (WebStorage.setItem    storage a b)
 
-runLocalStorage :: ∀ a eff. Storage a -> WebStorage.EffWebStorage eff a
+runLocalStorage
+  :: ∀ a m eff.
+   ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
+   , MonadRec m
+   )
+  => Storage a
+  -> m a
 runLocalStorage = runStorage WebStorage.localStorage
 
-runSessionStorage :: ∀ a eff. Storage a -> WebStorage.EffWebStorage eff a
+runSessionStorage
+  :: ∀ a m eff.
+   ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
+   , MonadRec m
+   )
+  => Storage a
+  -> m a
 runSessionStorage = runStorage WebStorage.sessionStorage
 
 runStorageT
