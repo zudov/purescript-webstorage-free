@@ -7,3 +7,5 @@ install:
 - bower install
 script:
   - pulp build
+  - bower link
+  - cd examples/halogen-storage/ && bower link purescript-websocket-simple && bower install && pulp build
