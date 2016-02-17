@@ -1,7 +1,10 @@
 -- | Provides a free monad API on top of purescript-webstorage.
 module Browser.WebStorage.Free
   ( StorageF(..)
-  , Storage()
+  , Storage
+  , StorageT
+  , class HasStorage
+  , liftStorage
   , clear
   , getItem
   , key
@@ -12,12 +15,16 @@ module Browser.WebStorage.Free
   , runLocalStorage
   , runSessionStorage
   , storageFI
+  , runStorageT
+  , runLocalStorageT
+  , runSessionStorageT
   ) where
 
-import Prelude (class Functor, Unit, (<$>), unit, id)
+import Prelude (class Functor, class Monad, Unit, (<$>), unit, id)
 
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Free (Free, runFreeM, liftF)
+import Control.Monad.Free.Trans (FreeT, runFreeT, liftFreeT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Maybe (Maybe())
 import Data.Functor ((<$))
@@ -41,25 +48,35 @@ instance functorStorageF :: Functor StorageF where
   map f (RemoveItem a b) = RemoveItem a (f b)
   map f (SetItem a b c) = SetItem a b (f c)
 
-type Storage a = Free StorageF a
+class (Functor f) <= HasStorage f where
+  liftStorage :: Natural StorageF f
 
-clear :: Storage Unit
-clear = liftF (Clear unit)
+instance freeStorageHasStorage :: HasStorage (Free StorageF) where
+  liftStorage = liftF
 
-getItem :: String -> Storage (Maybe String)
-getItem a = liftF (GetItem a id)
+instance freeStorageTHasStorage :: (Monad m) => HasStorage (FreeT StorageF m) where
+  liftStorage = liftFreeT
 
-key :: Number -> Storage (Maybe String)
-key a = liftF (Key a id)
+type Storage = Free StorageF
+type StorageT = FreeT StorageF
 
-length :: Storage Number
-length = liftF (Length id)
+clear :: ∀ f. (HasStorage f) => f Unit
+clear = liftStorage (Clear unit)
 
-removeItem :: String -> Storage Unit
-removeItem a = liftF (RemoveItem a unit)
+getItem :: ∀ f. (HasStorage f) => String -> f (Maybe String)
+getItem a = liftStorage (GetItem a id)
 
-setItem :: String -> String -> Storage Unit
-setItem a b = liftF (SetItem a b unit)
+key :: ∀ f. (HasStorage f) => Number -> f (Maybe String)
+key a = liftStorage (Key a id)
+
+length :: ∀ f. (HasStorage f) => f Number
+length = liftStorage (Length id)
+
+removeItem :: ∀ f. (HasStorage f) => String -> f Unit
+removeItem a = liftStorage (RemoveItem a unit)
+
+setItem :: ∀ f. (HasStorage f) => String -> String -> f Unit
+setItem a b = liftStorage (SetItem a b unit)
 
 runStorage
   :: ∀ a s m eff.
@@ -91,3 +108,31 @@ runLocalStorage = runStorage WebStorage.localStorage
 runSessionStorage :: ∀ a eff. Storage a -> WebStorage.EffWebStorage eff a
 runSessionStorage = runStorage WebStorage.sessionStorage
 
+runStorageT
+  :: ∀ a m s eff.
+   ( WebStorage.Storage s
+   , MonadEff (webStorage :: WebStorage.WebStorage | eff) m
+   , MonadRec m
+   )
+  => s
+  -> StorageT m a
+  -> m a
+runStorageT storage = runFreeT (storageFI storage)
+
+runLocalStorageT
+  :: ∀ a m eff.
+   ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
+   , MonadRec m
+   )
+  => StorageT m a
+  -> m a
+runLocalStorageT = runStorageT WebStorage.localStorage
+
+runSessionStorageT
+  :: ∀ a m eff.
+   ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
+   , MonadRec m
+   )
+  => StorageT m a
+  -> m a
+runSessionStorageT = runStorageT WebStorage.sessionStorage
