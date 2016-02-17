@@ -20,7 +20,7 @@ module Browser.WebStorage.Free
   , runSessionStorageT
   ) where
 
-import Prelude (class Functor, class Monad, Unit, (<$>), unit, id)
+import Prelude (class Monad, class Functor, Unit, (<$>), unit, id, (<<<))
 
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Free (Free, runFreeM, liftF)
@@ -51,11 +51,14 @@ instance functorStorageF :: Functor StorageF where
 class (Functor f) <= HasStorage f where
   liftStorage :: Natural StorageF f
 
-instance freeStorageHasStorage :: HasStorage (Free StorageF) where
-  liftStorage = liftF
+instance storageFHasStorage :: HasStorage StorageF where
+  liftStorage = id
 
-instance freeStorageTHasStorage :: (Monad m) => HasStorage (FreeT StorageF m) where
-  liftStorage = liftFreeT
+instance freeHasStorage :: (HasStorage f) => HasStorage (Free f) where
+  liftStorage = liftF <<< liftStorage
+
+instance freeTHasStorage :: (Monad m, HasStorage f) => HasStorage (FreeT f m) where
+  liftStorage = liftFreeT <<< liftStorage
 
 type Storage = Free StorageF
 type StorageT = FreeT StorageF
