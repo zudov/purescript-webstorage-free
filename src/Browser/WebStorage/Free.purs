@@ -1,20 +1,23 @@
 -- | Provides a free monad API on top of purescript-webstorage.
+
+-- | [whatwg-storage-interface]: https://html.spec.whatwg.org/multipage/webstorage.html#the-storage-interface
+
 module Browser.WebStorage.Free
   ( StorageF(..)
-  , Storage
-  , StorageT
   , class HasStorage
   , liftStorage
+  , Storage
+  , StorageT
   , clear
   , getItem
   , key
   , length
   , removeItem
   , setItem
+  , storageFI
   , runStorage
   , runLocalStorage
   , runSessionStorage
-  , storageFI
   , runStorageT
   , runLocalStorageT
   , runSessionStorageT
@@ -33,13 +36,14 @@ import Data.Int as Int
 
 import Browser.WebStorage as WebStorage
 
+-- | `StorageF` is an algebra which describes [the Storage interface][whatwg-storage-interface]
 data StorageF a
-  = Clear a
-  | GetItem String (Maybe String -> a)
+  = Length (Int -> a)
   | Key Int (Maybe String -> a)
-  | Length (Int -> a)
-  | RemoveItem String a
+  | GetItem String (Maybe String -> a)
   | SetItem String String a
+  | RemoveItem String a
+  | Clear a
 
 instance functorStorageF :: Functor StorageF where
   map f (Clear a) = Clear (f a)
@@ -49,48 +53,53 @@ instance functorStorageF :: Functor StorageF where
   map f (RemoveItem a b) = RemoveItem a (f b)
   map f (SetItem a b c) = SetItem a b (f c)
 
+-- | `HasStorage` captures the functors into which `StorageF` can be transformed.
 class (Functor f) <= HasStorage f where
   liftStorage :: Natural StorageF f
 
-instance storageFHasStorage :: HasStorage StorageF where
+instance hasStorageReflexive :: HasStorage StorageF where
   liftStorage = id
 
-instance freeHasStorage :: (HasStorage f) => HasStorage (Free f) where
+instance hasStorageFree :: (HasStorage f) => HasStorage (Free f) where
   liftStorage = liftF <<< liftStorage
 
-instance freeTHasStorage :: (Monad m, HasStorage f) => HasStorage (FreeT f m) where
+instance hasStorageFreeT :: (Monad m, HasStorage f) => HasStorage (FreeT f m) where
   liftStorage = liftFreeT <<< liftStorage
 
+-- | A free monad around the `StorageF` algebra.
 type Storage = Free StorageF
+
+-- | A free monad transformer around the `StorageF` algebra
 type StorageT = FreeT StorageF
 
-clear :: ∀ f. (HasStorage f) => f Unit
-clear = liftStorage (Clear unit)
-
-getItem :: ∀ f. (HasStorage f) => String -> f (Maybe String)
-getItem a = liftStorage (GetItem a id)
-
-key :: ∀ f. (HasStorage f) => Int -> f (Maybe String)
-key a = liftStorage (Key a id)
-
+-- | `length` returns the number of key/value pairs currently present in the storage.
 length :: ∀ f. (HasStorage f) => f Int
 length = liftStorage (Length id)
 
+-- | `key n` returns the name of the *n*th key in the storage.
+key :: ∀ f. (HasStorage f) => Int -> f (Maybe String)
+key n = liftStorage (Key n id)
+
+-- | `getItem key` returns the current value associated with the given key.
+getItem :: ∀ f. (HasStorage f) => String -> f (Maybe String)
+getItem k = liftStorage (GetItem k id)
+
+-- | `setItem key value` would add a new key/value pair to the storage,
+-- | or update the existing.
+setItem :: ∀ f. (HasStorage f) => String -> String -> f Unit
+setItem k value = liftStorage (SetItem k value unit)
+
+-- | `removeItem key` would remove the key/value pair with the given `key` from
+-- | the storage, if it exists.
 removeItem :: ∀ f. (HasStorage f) => String -> f Unit
 removeItem a = liftStorage (RemoveItem a unit)
 
-setItem :: ∀ f. (HasStorage f) => String -> String -> f Unit
-setItem a b = liftStorage (SetItem a b unit)
+-- | `clear` would empty the storage of all key/value pairs.
+clear :: ∀ f. (HasStorage f) => f Unit
+clear = liftStorage (Clear unit)
 
-runStorage
-  :: ∀ a s m eff.
-   ( WebStorage.Storage s
-   , MonadEff (webStorage :: WebStorage.WebStorage | eff) m
-   , MonadRec m
-   )
-  => s -> Storage a -> m a
-runStorage storage = runFreeM (storageFI storage)
-
+-- | Interpret `StorageF` operation as a call to the corresponding method of a
+-- | passed *Storage* object
 storageFI
   :: ∀ s m eff.
    ( WebStorage.Storage s
@@ -106,6 +115,20 @@ storageFI storage query = case query of
   RemoveItem a   next -> next <$  liftEff (WebStorage.removeItem storage a)
   SetItem    a b next -> next <$  liftEff (WebStorage.setItem    storage a b)
 
+
+-- | Interpret the `Storage` computation as calls to the corresponding methods
+-- | of a passed *Storage* object.
+runStorage
+  :: ∀ a s m eff.
+   ( WebStorage.Storage s
+   , MonadEff (webStorage :: WebStorage.WebStorage | eff) m
+   , MonadRec m
+   )
+  => s -> Storage a -> m a
+runStorage storage = runFreeM (storageFI storage)
+
+-- | Interpret the `Storage` computation as calls to the corresponding methods
+-- | of a `localStorage`.
 runLocalStorage
   :: ∀ a m eff.
    ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
@@ -115,6 +138,8 @@ runLocalStorage
   -> m a
 runLocalStorage = runStorage WebStorage.localStorage
 
+-- | Interpret the `Storage` computation as calls to the corresponding methods
+-- | of a `sessionStorage`.
 runSessionStorage
   :: ∀ a m eff.
    ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
@@ -124,6 +149,9 @@ runSessionStorage
   -> m a
 runSessionStorage = runStorage WebStorage.sessionStorage
 
+-- | Perform the computation in `StorageT m` as calls to the corresponding methods
+-- | of a passed *Storage*, the computation is performed in the underlying monad `m`
+-- | which has to allow performing `WebStorage` effects.
 runStorageT
   :: ∀ a m s eff.
    ( WebStorage.Storage s
@@ -135,6 +163,9 @@ runStorageT
   -> m a
 runStorageT storage = runFreeT (storageFI storage)
 
+-- | Perform the computation in `StorageT m` as calls to the `localStorage`,
+-- | the computation is performed in the underlying monad `m`  which has to
+-- | allow performing `WebStorage` effects.
 runLocalStorageT
   :: ∀ a m eff.
    ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
@@ -144,6 +175,9 @@ runLocalStorageT
   -> m a
 runLocalStorageT = runStorageT WebStorage.localStorage
 
+-- | Perform the computation in `StorageT m` as calls to the `sessionStorage`,
+-- | the computation is performed in the underlying monad `m`  which has to
+-- | allow performing `WebStorage` effects.
 runSessionStorageT
   :: ∀ a m eff.
    ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
