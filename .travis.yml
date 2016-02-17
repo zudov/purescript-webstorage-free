@@ -10,5 +10,5 @@ script:
   - bower link
   - cd examples
   - cd halogen-storage/ && bower link purescript-webstorage-free && bower install && pulp build --censor-lib && cd ../
-  - cd halogen-storaget-aff/ && bower link purescript-webstorage-free && bower install && pulp build --censor-lib && cd ../
+  - cd basic/ && bower link purescript-webstorage-free && bower install && pulp build --censor-lib && cd ../
 
