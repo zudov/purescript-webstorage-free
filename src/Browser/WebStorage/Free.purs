@@ -16,11 +16,7 @@ module Browser.WebStorage.Free
   , setItem
   , storageFI
   , runStorage
-  , runLocalStorage
-  , runSessionStorage
   , runStorageT
-  , runLocalStorageT
-  , runSessionStorageT
   ) where
 
 import Prelude (class Monad, class Functor, Unit, (<$>), unit, (>>>), (>>=), id, (<<<))
@@ -90,7 +86,6 @@ getItem k = liftStorage (GetItem k id)
 setItem :: ∀ f. (HasStorage f) => String -> String -> f Unit
 setItem k value = liftStorage (SetItem k value unit)
 
-
 -- | `modify key f` would get update the value associated with the given key using
 -- | provided function.
 modify :: ∀ f. (HasStorage f, Monad f) => String -> (String -> String) -> f Unit
@@ -122,7 +117,6 @@ storageFI storage query = case query of
   RemoveItem a   next -> next <$  liftEff (WebStorage.removeItem storage a)
   SetItem    a b next -> next <$  liftEff (WebStorage.setItem    storage a b)
 
-
 -- | Interpret the `Storage` computation as calls to the corresponding methods
 -- | of a passed *Storage* object.
 runStorage
@@ -133,28 +127,6 @@ runStorage
    )
   => s -> Storage a -> m a
 runStorage storage = runFreeM (storageFI storage)
-
--- | Interpret the `Storage` computation as calls to the corresponding methods
--- | of a `localStorage`.
-runLocalStorage
-  :: ∀ a m eff.
-   ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
-   , MonadRec m
-   )
-  => Storage a
-  -> m a
-runLocalStorage = runStorage WebStorage.localStorage
-
--- | Interpret the `Storage` computation as calls to the corresponding methods
--- | of a `sessionStorage`.
-runSessionStorage
-  :: ∀ a m eff.
-   ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
-   , MonadRec m
-   )
-  => Storage a
-  -> m a
-runSessionStorage = runStorage WebStorage.sessionStorage
 
 -- | Perform the computation in `StorageT m` as calls to the corresponding methods
 -- | of a passed *Storage*, the computation is performed in the underlying monad `m`
@@ -169,27 +141,3 @@ runStorageT
   -> StorageT m a
   -> m a
 runStorageT storage = runFreeT (storageFI storage)
-
--- | Perform the computation in `StorageT m` as calls to the `localStorage`,
--- | the computation is performed in the underlying monad `m`  which has to
--- | allow performing `WebStorage` effects.
-runLocalStorageT
-  :: ∀ a m eff.
-   ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
-   , MonadRec m
-   )
-  => StorageT m a
-  -> m a
-runLocalStorageT = runStorageT WebStorage.localStorage
-
--- | Perform the computation in `StorageT m` as calls to the `sessionStorage`,
--- | the computation is performed in the underlying monad `m`  which has to
--- | allow performing `WebStorage` effects.
-runSessionStorageT
-  :: ∀ a m eff.
-   ( MonadEff (webStorage :: WebStorage.WebStorage | eff) m
-   , MonadRec m
-   )
-  => StorageT m a
-  -> m a
-runSessionStorageT = runStorageT WebStorage.sessionStorage

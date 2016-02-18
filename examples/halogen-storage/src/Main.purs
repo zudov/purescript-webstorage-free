@@ -16,8 +16,8 @@ import Halogen.Util (appendToBody, onLoad)
 import Halogen.HTML.Indexed as H
 import Halogen.HTML.Events.Indexed as E
 
-import Browser.WebStorage (WebStorage)
-import Browser.WebStorage.Free (Storage, runLocalStorage, getItem, setItem)
+import Browser.WebStorage (WebStorage, localStorage)
+import Browser.WebStorage.Free (Storage, runStorage, getItem, setItem)
 
 data Query a
   = Restore a
@@ -59,6 +59,6 @@ ui = component render eval
 
 main :: Eff (HalogenEffects ( webStorage :: WebStorage )) Unit
 main = runAff throwException (const (pure unit)) $ do
-  app <- runUI (interpret runLocalStorage ui) initialState
+  app <- runUI (interpret (runStorage localStorage) ui) initialState
   app.driver $ action Restore
   onLoad $ appendToBody app.node

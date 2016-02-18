@@ -22,8 +22,8 @@ import Halogen.Util (appendToBody, onLoad)
 import Halogen.HTML.Indexed as H
 import Halogen.HTML.Events.Indexed as E
 
-import Browser.WebStorage (WebStorage)
-import Browser.WebStorage.Free (class HasStorage, StorageT, runLocalStorageT,
+import Browser.WebStorage (WebStorage, localStorage)
+import Browser.WebStorage.Free (class HasStorage, StorageT, runStorageT,
                                 getItem, setItem, liftStorage)
 
 data Query a
@@ -104,6 +104,6 @@ ui = component render eval
 
 main :: Eff AppEffects Unit
 main = runAff throwException (const (pure unit)) $ do
-  app <- runUI (interpret (runLocalStorageT <<< runAppF) ui) initialState
+  app <- runUI (interpret (runStorageT localStorage <<< runAppF) ui) initialState
   app.driver $ action Restore
   onLoad $ appendToBody app.node

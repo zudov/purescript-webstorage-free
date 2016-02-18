@@ -6,11 +6,11 @@ import Control.Monad.Eff.Console (CONSOLE, log)
 import Control.Monad.Trans (lift)
 import Data.Maybe (Maybe(..))
 
-import Browser.WebStorage (WebStorage())
-import Browser.WebStorage.Free (setItem, getItem, runLocalStorageT)
+import Browser.WebStorage (WebStorage(), localStorage)
+import Browser.WebStorage.Free (setItem, getItem, runStorageT)
 
 main :: forall e. Eff (console :: CONSOLE, webStorage :: WebStorage | e) Unit
-main = runLocalStorageT do
+main = runStorageT localStorage do
   mName <- getItem "name"
   case mName of
     Just name ->
