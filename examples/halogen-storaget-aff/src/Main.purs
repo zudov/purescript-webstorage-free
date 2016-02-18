@@ -12,19 +12,20 @@ import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Eff.Console (log, CONSOLE)
 import Control.Monad.Eff.Exception (throwException)
 import Control.Monad.Trans (lift)
+import Control.Monad.Free (Free())
 import Data.Functor ((<$))
 import Data.Int as Int
 import Data.Maybe (fromMaybe)
 
 import Halogen (HalogenEffects, ComponentDSL, Natural, ComponentHTML, Component,
-                action, interpret, runUI, component, set, liftH, gets, modify, liftEff')
+                action, interpret, runUI, component, set, liftH, gets, modify,
+                liftEff', HalogenFP())
 import Halogen.Util (appendToBody, onLoad)
 import Halogen.HTML.Indexed as H
 import Halogen.HTML.Events.Indexed as E
 
 import Browser.WebStorage (WebStorage, localStorage)
-import Browser.WebStorage.Free (class HasStorage, StorageT, runStorageT,
-                                getItem, setItem, liftStorage)
+import Browser.WebStorage.Free (StorageT, runStorageT, getItem, setItem)
 
 data Query a
   = Restore a
@@ -63,8 +64,8 @@ instance appFMonadEff :: MonadEff eff (AppF eff) where
 instance appFMonadAff :: MonadAff eff (AppF eff) where
   liftAff aff = AppF (lift (liftAff aff))
 
-instance appFHasStorage :: HasStorage (AppF eff) where
-  liftStorage a = AppF (liftStorage a)
+liftStorage :: ∀ eff a e s f. StorageT (Aff eff) a -> Free (HalogenFP e s f (AppF eff)) a
+liftStorage = liftH <<< AppF
 
 type AppEffects
   = HalogenEffects
@@ -96,10 +97,10 @@ ui = component render eval
     modify (updateCounter a)
     counter <- gets _.counter
     liftEff' $ log $ "Counter updated. New value: " <> show counter
-    liftH $ setItem "counter" $ show counter
+    liftStorage $ setItem "counter" $ show counter
   eval (Restore next) = next <$ do
     liftEff' $ log "Restoring counter's value"
-    mCounter <- liftH $ getItem "counter"
+    mCounter <- liftStorage $ getItem "counter"
     set { counter: fromMaybe 0 (Int.fromString =<< mCounter) }
 
 main :: Eff AppEffects Unit

@@ -4,8 +4,6 @@
 
 module Browser.WebStorage.Free
   ( StorageF(..)
-  , class HasStorage
-  , liftStorage
   , Storage
   , StorageT
   , clear
@@ -19,16 +17,15 @@ module Browser.WebStorage.Free
   , runStorageT
   ) where
 
-import Prelude (class Monad, class Functor, Unit, (<$>), unit, (>>>), (>>=), id, (<<<))
+import Prelude (class Monad, class Functor, Unit, (<$>), unit, (>>>), (>>=), id, (<<<), pure)
 
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
-import Control.Monad.Free (Free, runFreeM, liftF)
-import Control.Monad.Free.Trans (FreeT, runFreeT, liftFreeT)
+import Control.Monad.Free.Trans (FreeT, runFreeT, liftFreeT, hoistFreeT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Maybe (Maybe())
 import Data.Foldable (traverse_)
+import Data.Identity (Identity, runIdentity)
 import Data.Functor ((<$))
-import Data.NaturalTransformation (Natural())
 import Data.Int as Int
 
 import Browser.WebStorage as WebStorage
@@ -50,65 +47,52 @@ instance functorStorageF :: Functor StorageF where
   map f (RemoveItem a b) = RemoveItem a (f b)
   map f (SetItem a b c) = SetItem a b (f c)
 
--- | `HasStorage` captures the functors into which `StorageF` can be transformed.
-class (Functor f) <= HasStorage f where
-  liftStorage :: Natural StorageF f
-
-instance hasStorageReflexive :: HasStorage StorageF where
-  liftStorage = id
-
-instance hasStorageFree :: (HasStorage f) => HasStorage (Free f) where
-  liftStorage = liftF <<< liftStorage
-
-instance hasStorageFreeT :: (Monad m, HasStorage f) => HasStorage (FreeT f m) where
-  liftStorage = liftFreeT <<< liftStorage
-
 -- | A free monad around the `StorageF` algebra.
-type Storage = Free StorageF
+type Storage = StorageT Identity
 
 -- | A free monad transformer around the `StorageF` algebra.
 type StorageT = FreeT StorageF
 
 -- | `length` returns the number of key/value pairs currently present in the storage.
-length :: ∀ f. (HasStorage f) => f Int
-length = liftStorage (Length id)
+length :: ∀ m. (Monad m) => StorageT m Int
+length = liftFreeT (Length id)
 
 -- | `key n` returns the name of the *n*th key in the storage.
-key :: ∀ f. (HasStorage f) => Int -> f (Maybe String)
-key n = liftStorage (Key n id)
+key :: ∀ m. (Monad m) => Int -> StorageT m (Maybe String)
+key n = liftFreeT (Key n id)
 
 -- | `getItem key` returns the current value associated with the given key.
-getItem :: ∀ f. (HasStorage f) => String -> f (Maybe String)
-getItem k = liftStorage (GetItem k id)
+getItem :: ∀ m. (Monad m) => String -> StorageT m (Maybe String)
+getItem k = liftFreeT (GetItem k id)
 
 -- | `setItem key value` would add a new key/value pair to the storage,
 -- | or update the existing.
-setItem :: ∀ f. (HasStorage f) => String -> String -> f Unit
-setItem k value = liftStorage (SetItem k value unit)
+setItem :: ∀ m. (Monad m) => String -> String -> StorageT m Unit
+setItem k value = liftFreeT (SetItem k value unit)
 
 -- | `modify key f` would get update the value associated with the given key using
 -- | provided function.
-modify :: ∀ f. (HasStorage f, Monad f) => String -> (String -> String) -> f Unit
+modify :: ∀ m. (Monad m) => String -> (String -> String) -> StorageT m Unit
 modify k f = getItem k >>= traverse_ (f >>> setItem k)
 
 -- | `removeItem key` would remove the key/value pair with the given `key` from
 -- | the storage, if it exists.
-removeItem :: ∀ f. (HasStorage f) => String -> f Unit
-removeItem a = liftStorage (RemoveItem a unit)
+removeItem :: ∀ m. (Monad m) => String -> StorageT m Unit
+removeItem a = liftFreeT (RemoveItem a unit)
 
 -- | `clear` would empty the storage of all key/value pairs.
-clear :: ∀ f. (HasStorage f) => f Unit
-clear = liftStorage (Clear unit)
+clear :: ∀ m. (Monad m) => StorageT m Unit
+clear = liftFreeT (Clear unit)
 
 -- | Interpret `StorageF` operation as a call to the corresponding method of a
 -- | passed *Storage* object.
 storageFI
-  :: ∀ s m eff.
+  :: ∀ s m eff a.
    ( WebStorage.Storage s
    , MonadEff (webStorage :: WebStorage.WebStorage | eff) m
    , MonadRec m
    )
-  => s -> Natural StorageF m
+  => s -> StorageF a -> m a
 storageFI storage query = case query of
   Clear          next -> next <$  liftEff (WebStorage.clear      storage)
   GetItem    a   cont -> cont <$> liftEff (WebStorage.getItem    storage a)
@@ -126,7 +110,7 @@ runStorage
    , MonadRec m
    )
   => s -> Storage a -> m a
-runStorage storage = runFreeM (storageFI storage)
+runStorage storage = runStorageT storage <<< hoistFreeT (pure <<< runIdentity)
 
 -- | Perform the computation in `StorageT m` as calls to the corresponding methods
 -- | of a passed *Storage*, the computation is performed in the underlying monad `m`
