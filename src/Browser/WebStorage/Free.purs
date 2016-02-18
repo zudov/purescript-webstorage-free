@@ -23,20 +23,21 @@ module Browser.WebStorage.Free
   , runSessionStorageT
   ) where
 
-import Prelude (class Monad, class Functor, Unit, (<$>), unit, id, (<<<))
+import Prelude (class Monad, class Functor, Unit, (<$>), unit, (>>>), (>>=), id, (<<<))
 
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Free (Free, runFreeM, liftF)
 import Control.Monad.Free.Trans (FreeT, runFreeT, liftFreeT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Maybe (Maybe())
+import Data.Foldable (traverse_)
 import Data.Functor ((<$))
 import Data.NaturalTransformation (Natural())
 import Data.Int as Int
 
 import Browser.WebStorage as WebStorage
 
--- | `StorageF` is an algebra which describes [the Storage interface][whatwg-storage-interface]
+-- | `StorageF` is an algebra which describes [the Storage interface][whatwg-storage-interface].
 data StorageF a
   = Length (Int -> a)
   | Key Int (Maybe String -> a)
@@ -69,7 +70,7 @@ instance hasStorageFreeT :: (Monad m, HasStorage f) => HasStorage (FreeT f m) wh
 -- | A free monad around the `StorageF` algebra.
 type Storage = Free StorageF
 
--- | A free monad transformer around the `StorageF` algebra
+-- | A free monad transformer around the `StorageF` algebra.
 type StorageT = FreeT StorageF
 
 -- | `length` returns the number of key/value pairs currently present in the storage.
@@ -89,6 +90,12 @@ getItem k = liftStorage (GetItem k id)
 setItem :: ∀ f. (HasStorage f) => String -> String -> f Unit
 setItem k value = liftStorage (SetItem k value unit)
 
+
+-- | `modify key f` would get update the value associated with the given key using
+-- | provided function.
+modify :: ∀ f. (HasStorage f, Monad f) => String -> (String -> String) -> f Unit
+modify k f = getItem k >>= traverse_ (f >>> setItem k)
+
 -- | `removeItem key` would remove the key/value pair with the given `key` from
 -- | the storage, if it exists.
 removeItem :: ∀ f. (HasStorage f) => String -> f Unit
@@ -99,7 +106,7 @@ clear :: ∀ f. (HasStorage f) => f Unit
 clear = liftStorage (Clear unit)
 
 -- | Interpret `StorageF` operation as a call to the corresponding method of a
--- | passed *Storage* object
+-- | passed *Storage* object.
 storageFI
   :: ∀ s m eff.
    ( WebStorage.Storage s
